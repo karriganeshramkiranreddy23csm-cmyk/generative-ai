@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home Temperature Control Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #FAF9F6;
+            --primary-dark: #1D3557;
+            --accent-teal: #457B9D;
+            --accent-red: #E63946;
+            --success-green: #2A9D8F;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--primary-dark);
+            font-family: var(--font-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: row;
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .dashboard {
+            flex: 1;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(29, 53, 87, 0.08);
+            border-top: 4px solid var(--primary-dark);
+        }
+
+        .dashboard pre {
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .graph-container {
+            flex: 1.5;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(29, 53, 87, 0.08);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: var(--primary-dark);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Smart Home Agent Simulation</h1>
+        <p>Real-time Goal-Based Agent (HTML/JS Port)</p>
+    </div>
+
+    <div class="container">
+        <div class="dashboard">
+            <pre id="terminal-output">Initializing Simulation...</pre>
+        </div>
+        
+        <div class="graph-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Environment Simulation
+        class Environment {
+            constructor() {
+                this.roomTemp = 26.0;
+                this.outsideTemp = 31.2;
+                this.acIsOn = false;
+            }
+            update() {
+                const naturalWarming = 0.05 + Math.random() * 0.1;
+                const acCooling = 0.3 + Math.random() * 0.2;
+                if (this.acIsOn) {
+                    this.roomTemp -= acCooling;
+                } else if (this.roomTemp < this.outsideTemp) {
+                    this.roomTemp += naturalWarming;
+                }
+                this.roomTemp += (Math.random() * 0.04) - 0.02;
+            }
+        }
+
+        // Agent Logic
+        class Agent {
+            constructor() {
+                this.minTemp = 22.0;
+                this.maxTemp = 24.0;
+                this.acStatus = false;
+                this.lastReasoning = "";
+            }
+            evaluateAndDecide(currentTemp) {
+                if (currentTemp > this.maxTemp) {
+                    this.lastReasoning = this.acStatus 
+                        ? `Temperature ${currentTemp.toFixed(1)}°C → Above comfort range → AC remains ON (COOLING)` 
+                        : `Temperature ${currentTemp.toFixed(1)}°C → Above comfort range → AC turned ON`;
+                    this.acStatus = true;
+                } else if (currentTemp < this.minTemp) {
+                    this.lastReasoning = this.acStatus 
+                        ? `Temperature ${currentTemp.toFixed(1)}°C → Below comfort range → AC turned OFF` 
+                        : `Temperature ${currentTemp.toFixed(1)}°C → Comfortable / Cool → AC remains OFF`;
+                    this.acStatus = false;
+                } else {
+                    this.lastReasoning = `Temperature ${currentTemp.toFixed(1)}°C → Within comfort range → AC maintains state`;
+                }
+                return this.acStatus;
+            }
+        }
+
+        // Setup Chart
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Room Temp (°C)',
+                        data: [],
+                        borderColor: '#1D3557',
+                        borderWidth: 2.5,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Upper Limit (24°C)',
+                        data: [],
+                        borderColor: 'transparent',
+                        backgroundColor: 'rgba(69, 123, 157, 0.15)',
+                        fill: '+1',
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Lower Limit (22°C)',
+                        data: [],
+                        borderColor: 'transparent',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Target (23°C)',
+                        data: [],
+                        borderColor: 'rgba(230, 57, 70, 0.6)',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: {
+                        min: 21,
+                        max: 27,
+                        title: { display: true, text: 'Temperature (°C)' }
+                    },
+                    x: {
+                        title: { display: true, text: 'Time (s)' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Simulation Loop
+        const env = new Environment();
+        const agent = new Agent();
+        let time = 0;
+        const maxDuration = 60;
+        
+        function padZero(num) { return num < 10 ? '0' + num : num; }
+
+        const interval = setInterval(() => {
+            if (time > maxDuration) {
+                clearInterval(interval);
+                document.getElementById('terminal-output').innerText += '\n\n=== SIMULATION COMPLETE ===\nAgent achieved goal state autonomously.';
+                return;
+            }
+
+            // 1. Get State
+            const temp = env.roomTemp;
+            
+            // 2. Agent Decision
+            const action = agent.evaluateAndDecide(temp);
+            
+            // 3. Apply Action
+            env.acIsOn = action;
+            env.update();
+
+            // Update UI - Dashboard
+            const acStr = action ? "ON" : "OFF";
+            const decisionStr = action ? "COOLING" : "IDLE";
+            
+            const dashboardText = `====================================================
+        SMART HOME TEMPERATURE CONTROL AGENT
+====================================================
+Simulation Time : 00:${padZero(time)}
+Room Temperature: ${temp.toFixed(1)} °C
+Outside Temp    : ${env.outsideTemp.toFixed(1)} °C
+Target Range    : 22.0 - 24.0 °C
+Target Temp     : 23.0 °C
+
+AC Status       : ${acStr}
+Agent Decision  : ${decisionStr}
+Current Goal    : Maintain comfortable temperature
+
+Agent Reasoning:
+${agent.lastReasoning}
+
+Agent Status    : RUNNING
+====================================================`;
+            document.getElementById('terminal-output').innerText = dashboardText;
+
+            // Update Chart
+            chart.data.labels.push(time);
+            chart.data.datasets[0].data.push(temp);
+            chart.data.datasets[1].data.push(24.0); // Upper
+            chart.data.datasets[2].data.push(22.0); // Lower
+            chart.data.datasets[3].data.push(23.0); // Target
+
+            if (chart.data.labels.length > 30) {
+                chart.data.labels.shift();
+                chart.data.datasets.forEach(ds => ds.data.shift());
+            }
+
+            chart.update();
+            time += 1;
+        }, 500); // Update every 500ms
+    </script>
+</body>
+</html>
